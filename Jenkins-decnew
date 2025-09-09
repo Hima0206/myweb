@@ -1,34 +1,37 @@
-pipeline{
+pipeline {
     agent any
     
-    environment{
-        PATH = "/opt/maven3/bin:$PATH"
+    tools {
+        maven '3.9.9'   // Use the Maven tool configured in Jenkins
     }
-    stages{
-        stage("Git Checkout"){
-            steps{
-                git credentialsId: 'java', url: 'https://github.com/Hima0206/myweb.git'
+    
+    stages {
+        stage("Git Checkout") {
+            steps {
+                git branch: 'master', credentialsId: 'java', url: 'https://github.com/Hima0206/myweb.git'
             }
         }
-        stage("Maven Build"){
-            steps{
+        
+        stage("Maven Build") {
+            steps {
                 sh "mvn clean package"
                 sh "mv target/*.war target/myweb.war"
             }
         }
-        stage("deploy-dev"){
-            steps{
+        
+        stage("Deploy to Dev") {
+            steps {
                 sshagent(['tomcat-new']) {
-                sh """
-                    scp -o StrictHostKeyChecking=no target/myweb.war  ec2-user@192.168.10.163:/home/ec2-user/apache-tomcat-9.0.109/webapps/
-                    
-                    ssh ec2-user@192.168.10.163 /home/ec2-user/apache-tomcat-9.0.109/bin/shutdown.sh
-                    
-                    ssh ec2-user@192.168.10.163 /home/ec2-user/apache-tomcat-9.0.109/bin/startup.sh
-                
-                """
-            }
-            
+                    sh """
+                        scp -o StrictHostKeyChecking=no target/myweb.war ec2-user@192.168.10.163:/home/ec2-user/apache-tomcat-9.0.109/webapps/
+
+                        ssh -o StrictHostKeyChecking=no ec2-user@192.168.10.163 /home/ec2-user/apache-tomcat-9.0.109/bin/shutdown.sh || true
+                        
+                        sleep 5
+                        
+                        ssh -o StrictHostKeyChecking=no ec2-user@192.168.10.163 /home/ec2-user/apache-tomcat-9.0.109/bin/startup.sh
+                    """
+                }
             }
         }
     }
