@@ -1,56 +1,72 @@
-pipeline{
+pipeline {
     agent any
-     tools {
-        maven 'Maven-3.6.1'
+
+    tools {
+        maven "3.9.9"
     }
-    
-    environment{
-        PATH = "/opt/maven3/bin:$PATH"
+
+    environment {
+        SONAR_URL = "http://184.72.122.162:9000"
     }
-    stages{
-        stage("Git Checkout"){
-            steps{
-                git credentialsId: 'javahome2', url: 'https://github.com/srinivas1987devops/myweb.git'
+
+    stages {
+        stage('Checkout') {
+            steps {
+                git credentialsId: 'java', url: 'https://github.com/Hima0206/myweb.git'
             }
         }
-        stage("Maven Build"){
-            steps{
-                sh "mvn clean sonar:sonar package"
-                
+
+        stage('Maven Build') {
+            steps {
+                sh "mvn clean package"
             }
         }
-        stage('Upload War To Nexus'){
-            steps{
-                  nexusArtifactUploader artifacts: [
-                       [
-                            artifactId: 'myweb', 
-                            classifier: '', 
-                            file: "target/myweb-8.2.0.war", 
-                            type: 'war'
-                       ]
-                  ], 
-                  credentialsId: 'nexus3', 
-                  groupId: 'in.javahome', 
-                  nexusUrl: '172.31.40.8:8081', 
-                  nexusVersion: 'nexus3', 
-                  protocol: 'http', 
-                  repository: 'sample-releases', 
-                  version: '8.2.0'  
-              }
+
+        stage('Static Code Analysis') {
+            steps {
+                withCredentials([string(credentialsId: 'sonar-token', variable: 'SONAR_AUTH_TOKEN')]) {
+                    sh '''
+                        mvn clean verify sonar:sonar \
+                          -Dsonar.host.url=$SONAR_URL \
+                          -Dsonar.token=$SONAR_AUTH_TOKEN
+                    '''
+                }
             }
-        stage("deploy-dev"){
-            steps{
+        }
+
+        stage('Artifact Upload') {
+            steps {
+                nexusArtifactUploader artifacts: [
+                    [
+                        artifactId: 'myweb',
+                        classifier: '',
+                        file: 'target/myweb-8.2.0.war',
+                        type: 'war'
+                    ]
+                ],
+                credentialsId: 'nexus3',
+                groupId: 'in.javahome',
+                nexusUrl: '192.168.10.157:8081',
+                nexusVersion: 'nexus3',
+                protocol: 'http',
+                repository: 'sample-releases',
+                version: '8.2.0'
+            }
+        }
+
+        stage('Deploy to Dev') {
+            steps {
                 sshagent(['tomcat-new']) {
-                sh """
-                    scp -o StrictHostKeyChecking=no target/myweb-8.2.0.war  ec2-user@172.31.41.172:/home/ec2-user/apache-tomcat-9.0.64/webapps/
-                    
-                    ssh ec2-user@172.31.41.172 /home/ec2-user/apache-tomcat-9.0.64/bin/shutdown.sh
-                    
-                    ssh ec2-user@172.31.41.172 /home/ec2-user/apache-tomcat-9.0.64/bin/startup.sh
-                
-                """
-            }
-            
+                    sh '''
+                        scp -o StrictHostKeyChecking=no target/myweb-8.2.0.war ec2-user@192.168.10.163:/home/ec2-user/apache-tomcat-9.0.109/webapps/
+
+                        ssh -o StrictHostKeyChecking=no ec2-user@192.168.10.163 /home/ec2-user/apache-tomcat-9.0.109/bin/shutdown.sh || true
+
+                        sleep 5
+
+                        ssh -o StrictHostKeyChecking=no ec2-user@192.168.10.163 /home/ec2-user/apache-tomcat-9.0.109/bin/startup.sh
+                    '''
+                }
             }
         }
     }
