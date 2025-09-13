@@ -1,59 +1,81 @@
-pipeline{
+pipeline {
     agent any
-     tools {
-        maven 'Maven-3.6.1'
+
+    tools {
+        maven "3.9.9"
     }
-    
-    environment{
-        PATH = "/opt/maven3/bin:$PATH"
+
+    environment {
+        SONAR_URL = "http://192.168.10.162:9000"
     }
-    stages{
-        stage("Git Checkout"){
-            steps{
-                git credentialsId: 'javahome2', url: 'https://github.com/srinivas1987devops/myweb.git'
+
+    stages {
+        stage('Checkout') {
+            steps {
+                git credentialsId: 'java', url: 'https://github.com/Hima0206/myweb.git'
             }
         }
-        stage("Maven Build"){
-            steps{
-                sh "mvn clean sonar:sonar package"
-                
+
+        stage('Maven Build') {
+            steps {
+                sh "mvn clean package"
             }
         }
-        stage('Upload War To Nexus'){
-            steps{
-                  nexusArtifactUploader artifacts: [
-                       [
-                            artifactId: 'myweb', 
-                            classifier: '', 
-                            file: "target/myweb-8.2.0.war", 
-                            type: 'war'
-                       ]
-                  ], 
-                  credentialsId: 'nexus3', 
-                  groupId: 'in.javahome', 
-                  nexusUrl: '172.31.36.181:8081', 
-                  nexusVersion: 'nexus3', 
-                  protocol: 'http', 
-                  repository: 'sample-releases', 
-                  version: '8.2.0'  
-              }
+
+        stage('Static Code Analysis') {
+            steps {
+                withCredentials([string(credentialsId: 'sonar-token', variable: 'SONAR_AUTH_TOKEN')]) {
+                    sh '''
+                        mvn clean verify sonar:sonar \
+                          -Dsonar.host.url=$SONAR_URL \
+                          -Dsonar.token=$SONAR_AUTH_TOKEN \
+                          -Dsonar.plugins.downloadOnlyRequired=true \
+                          -Dsonar.scm.disabled=true \
+                          -Dsonar.cpd.exclusions=**/*.xml \
+                          -Dsonar.exclusions=**/target/**,**/*.xml \
+                          -Dsonar.sources=src/main/java \
+                          -Dsonar.tests=src/test/java \
+                          -Dsonar.java.binaries=target/classes
+                    '''
+                }
             }
-        stage('Build Docker Image'){
-            steps{
-                 sh 'docker build -t deepikac2021/spring-boot-mongo .'
-                 sh 'docker build -t tomcat:${BUILD_NUMBER} .'
-                 sh 'docker run -itd --name srini36 -p 2900:8080 tomcat:${BUILD_NUMBER}'
-             }
-         }
-        stage('Push Docker Image'){
-             steps{
-                  withCredentials([string(credentialsId: 'DOCKER_HUB_CREDENTIALS', variable: 'DOCKER_HUB_CREDENTIALS')]) {
-                      sh "docker login -u deepikac2021 -p ${DOCKER_HUB_CREDENTIALS}"
-            }
-            sh 'docker push deepikac2021/spring-boot-mongo'
         }
-      }
-        
-        
-    }
+
+        stage('Artifact Upload') {
+            steps {
+                nexusArtifactUploader artifacts: [
+                    [
+                        artifactId: 'myweb',
+                        classifier: '',
+                        file: 'target/myweb-8.2.0.war',
+                        type: 'war'
+                    ]
+                ],
+                credentialsId: 'nexus3',
+                groupId: 'in.javahome',
+                nexusUrl: '192.168.10.157:8081',
+                nexusVersion: 'nexus3',
+                protocol: 'http',
+                repository: 'sample-releases',
+                version: '8.2.0'
+            }
+        }
+
+        stage('build docker image') {
+            steps {
+                sh 'docker build -t himateja0206/springbootapp .'
+                sh 'docker build -t tomcat:${BUILD_NUMBER} .'
+                sh 'docker run -d -p 5000:8080 tomcat:${BUILD_NUMBER}'
+            }
+        }
+
+        stage('push docker image') {
+            steps {
+                withCredentials([string(credentialsId: 'DOCKER_CRED', variable: 'DOCKER_HUB_CREDENTIALS')]) {
+                    sh "docker login -u himateja0206 -p ${DOCKER_HUB_CREDENTIALS}"
+                }
+               sh 'docker push himateja0206/springbootapp'
+            }
+        }
+    } 
 }
