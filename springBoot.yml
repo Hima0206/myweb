@@ -13,7 +13,7 @@ spec:
         app: springboot
     spec:
       containers:
-      - image: himateja0206/springbootapp:"$(BuildNumber)"
+      - image: himateja0206/springbootapp:"$(BUILD_NUMBER)"
         name: springboot
         ports:
         - containerPort: 8080  
