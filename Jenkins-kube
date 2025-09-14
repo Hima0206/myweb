@@ -7,6 +7,11 @@ pipeline {
 
     environment {
         SONAR_URL = "http://192.168.10.162:9000"
+        IMAGE_NAME = "himateja0206/springbootapp"
+        DEPLOYMENT_FILE = "myweb/springBoot.yml"
+        PLACEHOLDER_TAG = "replaceImageTag"
+        GIT_REPO_NAME = "myweb"
+        GIT_USER_NAME = "Himateja0206"
     }
 
     stages {
@@ -61,40 +66,31 @@ pipeline {
             }
         }
 
-        stage('build docker image') {
+        stage('Build & Push Docker Image') {
             steps {
-                sh 'docker build -t himateja0206/springbootapp .'
-                sh 'docker build -t tomcat:${BUILD_NUMBER} .'
+                withCredentials([string(credentialsId: 'DOCKER_CRED', variable: 'DOCKER_HUB_CREDENTIALS')]) {
+                    sh '''
+                        docker build -t ${IMAGE_NAME}:${BUILD_NUMBER} .
+                        docker login -u himateja0206 -p ${DOCKER_HUB_CREDENTIALS}
+                        docker push ${IMAGE_NAME}:${BUILD_NUMBER}
+                    '''
+                }
             }
         }
 
-        stage('push docker image') {
+        stage('Update Deployment File') {
             steps {
-                withCredentials([string(credentialsId: 'DOCKER_CRED', variable: 'DOCKER_HUB_CREDENTIALS')]) {
-                    sh "docker login -u himateja0206 -p ${DOCKER_HUB_CREDENTIALS}"
+                withCredentials([string(credentialsId: 'java', variable: 'GITHUB_TOKEN')]) {
+                    sh '''
+                        git config user.email "Himateja0206@gmail.com"
+                        git config user.name "Himateja0206"
+                        sed -i "s|${IMAGE_NAME}:${PLACEHOLDER_TAG}|${IMAGE_NAME}:${BUILD_NUMBER}|g" ${DEPLOYMENT_FILE}
+                        git add ${DEPLOYMENT_FILE}
+                        git commit -m "Update deployment image to version ${BUILD_NUMBER}"
+                        git push https://${GITHUB_TOKEN}@github.com/${GIT_USER_NAME}/${GIT_REPO_NAME} HEAD:main
+                    '''
                 }
-               sh 'docker push himateja0206/springbootapp'
             }
         }
-       stage('Update Deployment File') {
-        environment {
-            GIT_REPO_NAME = "myweb"
-            GIT_USER_NAME = "Himateja0206"
-             }
-           steps {
-            withCredentials([string(credentialsId: 'github', variable: 'GITHUB_TOKEN')]) {
-                sh '''
-                    git config user.email "Himateja0206@gmail.com"
-                    git config user.name "Himateja0206"
-                    BUILD_NUMBER=${BUILD_NUMBER}
-                    sed -i "s/replaceImageTag/${BUILD_NUMBER}/g" myweb/springBoot.yml
-                    git add myweb/springBoot.yml
-                    git commit -m "Update deployment image to version ${BUILD_NUMBER}"
-                    git push https://${GITHUB_TOKEN}@github.com/${GIT_USER_NAME}/${GIT_REPO_NAME} HEAD:main
-          }
-      
     }
-        
-    }
-}
 }
