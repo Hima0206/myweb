@@ -13,7 +13,7 @@ spec:
         app: springboot
     spec:
       containers:
-      - image: himateja0206/springbootapp:replaceImageTag
+      - image: himateja0206/springbootapp:11
         name: springboot
         ports:
         - containerPort: 8080  
